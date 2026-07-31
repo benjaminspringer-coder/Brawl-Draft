@@ -1,7 +1,12 @@
 import { Router } from "express";
+import { db, tournamentsTable } from "@workspace/db";
+import { eq } from "drizzle-orm";
+import { parseMatcherinoUrl } from "../lib/matcherino";
+import { fetchAndStoreTournament } from "../lib/tournament-importer";
 import { logger } from "../lib/logger";
 
 const router = Router();
+
 
 const EU_REGION_IDS = new Set([14, 15, 17, 18, 25]);
 
@@ -105,10 +110,93 @@ router.get("/corestats/eu-scan", async (req, res) => {
   try {
     logger.info("corestats EU scan started");
     const tournaments = await fetchAllEuTournaments();
-    logger.info({ count: tournaments.length }, "corestats EU scan complete");
-    res.json({ ok: true, count: tournaments.length, tournaments });
+
+    // Map existing DB tournaments by externalId and slug
+    const dbTournaments = await db.select().from(tournamentsTable);
+    type TournamentRow = typeof tournamentsTable.$inferSelect;
+    const dbByExternalId = new Map<string, TournamentRow>(dbTournaments.map((t) => [String(t.externalId || ""), t]));
+    const dbBySlug = new Map<string, TournamentRow>(dbTournaments.map((t) => [t.slug, t]));
+
+
+    const enrichedTournaments = tournaments.map((t) => {
+      const dbMatch =
+        dbByExternalId.get(String(t.id)) ||
+        dbBySlug.get(`tournaments/${t.id}`) ||
+        dbBySlug.get(String(t.id));
+
+      return {
+        ...t,
+        inDatabase: !!dbMatch,
+        dbId: dbMatch?.id ?? null,
+        dbMatchCount: dbMatch?.matchCount ?? 0,
+        dbStatus: dbMatch?.status ?? null,
+      };
+    });
+
+    logger.info({ count: enrichedTournaments.length }, "corestats EU scan complete");
+    res.json({ ok: true, count: enrichedTournaments.length, tournaments: enrichedTournaments });
   } catch (err) {
     logger.error({ err }, "corestats EU scan failed");
+    res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
+// POST /api/corestats/sync-all-drafts
+// Imports all EU Matcherino tournaments and fetches all their match drafts into the DB
+router.post("/corestats/sync-all-drafts", async (req, res) => {
+  try {
+    logger.info("Starting full sync of all EU tournament drafts");
+    const tournaments = await fetchAllEuTournaments();
+
+    const dbTournaments = await db.select().from(tournamentsTable);
+    type TournamentRow = typeof tournamentsTable.$inferSelect;
+    const dbByExternalId = new Map<string, TournamentRow>(dbTournaments.map((t) => [String(t.externalId || ""), t]));
+    const dbBySlug = new Map<string, TournamentRow>(dbTournaments.map((t) => [t.slug, t]));
+
+
+    let syncedCount = 0;
+    let queuedCount = 0;
+
+    for (const t of tournaments) {
+      const existing =
+        dbByExternalId.get(String(t.id)) ||
+        dbBySlug.get(`tournaments/${t.id}`) ||
+        dbBySlug.get(String(t.id));
+
+      const parsedUrl = parseMatcherinoUrl(t.importUrl);
+      if (!parsedUrl) continue;
+
+      if (!existing) {
+        const [created] = await db
+          .insert(tournamentsTable)
+          .values({
+            slug: parsedUrl.identifier,
+            name: t.title,
+            url: t.importUrl,
+            status: "fetching",
+            matchCount: 0,
+            source: "emea_auto",
+            eventDate: t.startAt ? new Date(t.startAt) : null,
+            externalId: String(t.id),
+          })
+          .returning();
+
+        syncedCount++;
+        fetchAndStoreTournament(created.id, parsedUrl, t.importUrl);
+      } else if (existing.matchCount === 0 || existing.status === "error" || existing.status === "fetching") {
+        queuedCount++;
+        fetchAndStoreTournament(existing.id, parsedUrl, t.importUrl);
+      }
+    }
+
+    res.json({
+      ok: true,
+      totalCount: tournaments.length,
+      newlyImported: syncedCount,
+      reQueued: queuedCount,
+    });
+  } catch (err) {
+    logger.error({ err }, "Failed to sync all EU tournament drafts");
     res.status(500).json({ ok: false, error: String(err) });
   }
 });
