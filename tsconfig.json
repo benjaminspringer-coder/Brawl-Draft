@@ -1,0 +1,42 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "experimentalDecorators": true,
+    "useDefineForClassFields": false,
+    "module": "ESNext",
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "skipLibCheck": true,
+    "moduleResolution": "bundler",
+    "isolatedModules": true,
+    "moduleDetection": "force",
+    "allowJs": true,
+    "jsx": "react-jsx",
+    "paths": {
+      "@/*": ["./src/*"],
+      "@assets/*": ["./attached_assets/*"],
+      "@workspace/db": ["./lib/db/src/index.ts"],
+      "@workspace/db/*": ["./lib/db/src/*"],
+      "@workspace/api-client-react": ["./lib/api-client-react/src/index.ts"],
+      "@workspace/api-client-react/*": ["./lib/api-client-react/src/*"],
+      "@workspace/api-zod": ["./lib/api-zod/src/index.ts"],
+      "@workspace/api-zod/*": ["./lib/api-zod/src/*"],
+      "@workspace/integrations-gemini-ai": ["./lib/integrations-gemini-ai/src/index.ts"],
+      "@workspace/integrations-gemini-ai/*": ["./lib/integrations-gemini-ai/src/*"]
+    },
+    "allowImportingTsExtensions": true,
+    "noEmit": true
+  },
+  "exclude": [
+    "node_modules",
+    "dist",
+    "lib/api-spec",
+    "lib/db",
+    "lib/api-zod",
+    "lib/api-client-react",
+    "lib/integrations-gemini-ai"
+  ]
+}

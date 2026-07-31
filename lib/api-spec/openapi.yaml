@@ -1,0 +1,657 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: Matcherino Draft Viewer API
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: tournaments
+    description: Tournament operations
+  - name: matches
+    description: Match operations
+  - name: gemini
+    description: Gemini AI chat and analysis operations
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns server health status
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  /tournaments:
+    get:
+      operationId: listTournaments
+      tags: [tournaments]
+      summary: List all tracked tournaments
+      responses:
+        "200":
+          description: List of tournaments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Tournament"
+    post:
+      operationId: addTournament
+      tags: [tournaments]
+      summary: Add a Matcherino tournament by URL
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TournamentInput"
+      responses:
+        "201":
+          description: Tournament added and data fetched
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tournament"
+        "400":
+          description: Invalid URL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Tournament already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tournament"
+
+  /tournaments/{id}:
+    get:
+      operationId: getTournament
+      tags: [tournaments]
+      summary: Get a tournament by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Tournament data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tournament"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteTournament
+      tags: [tournaments]
+      summary: Delete a tournament and its matches
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /events/sync-emea:
+    post:
+      operationId: syncEmeaEvents
+      tags: [tournaments]
+      summary: Auto-import completed EMEA Featured Brawl Stars events from Matcherino
+      responses:
+        "200":
+          description: Sync results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  imported:
+                    type: integer
+                    description: Number of newly imported events
+                  skipped:
+                    type: integer
+                    description: Number of events already in DB
+                  events:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Tournament"
+                required: [imported, skipped, events]
+
+  /tournaments/{id}/refresh:
+    post:
+      operationId: refreshTournament
+      tags: [tournaments]
+      summary: Re-fetch tournament data from Matcherino
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Refreshed tournament
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tournament"
+
+  /tournaments/{id}/matches:
+    get:
+      operationId: listTournamentMatches
+      tags: [matches]
+      summary: List all matches for a tournament with draft info
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Matches with draft data
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Match"
+
+  /matches:
+    get:
+      operationId: listAllMatches
+      tags: [matches]
+      summary: List all matches across all tournaments
+      parameters:
+        - name: tournamentId
+          in: query
+          required: false
+          schema:
+            type: ["integer", "null"]
+      responses:
+        "200":
+          description: All matches
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Match"
+
+  /bsc/qualifiers:
+    get:
+      operationId: listBscQualifiers
+      tags: [tournaments]
+      summary: List all BSC Monthly Qualifier tournaments (source = corestats_qualifier)
+      responses:
+        "200":
+          description: List of qualifier tournaments ordered by eventDate
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Tournament"
+
+  /bsc/sync:
+    post:
+      operationId: syncBscQualifiers
+      tags: [tournaments]
+      summary: Import or re-import BSC Monthly Qualifier Day 1 and Day 2 from corestats scrims
+      responses:
+        "200":
+          description: Sync result for both days
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BscSyncResult"
+
+  /gemini/conversations:
+    get:
+      operationId: listGeminiConversations
+      tags: [gemini]
+      summary: List all conversations
+      responses:
+        "200":
+          description: List of conversations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GeminiConversation"
+    post:
+      operationId: createGeminiConversation
+      tags: [gemini]
+      summary: Create a new conversation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GeminiConversationInput"
+      responses:
+        "201":
+          description: Created conversation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GeminiConversation"
+  /gemini/conversations/{id}:
+    get:
+      operationId: getGeminiConversation
+      tags: [gemini]
+      summary: Get conversation with messages
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Conversation with messages
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GeminiConversationWithMessages"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GeminiError"
+    delete:
+      operationId: deleteGeminiConversation
+      tags: [gemini]
+      summary: Delete a conversation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GeminiError"
+  /gemini/conversations/{id}/messages:
+    get:
+      operationId: listGeminiMessages
+      tags: [gemini]
+      summary: List messages in a conversation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of messages
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GeminiMessage"
+    post:
+      operationId: sendGeminiMessage
+      tags: [gemini]
+      summary: Send a message and receive an AI response (SSE stream)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GeminiMessageInput"
+      responses:
+        "200":
+          description: SSE stream of assistant response chunks
+          content:
+            text/event-stream: {}
+  /gemini/analyze:
+    post:
+      operationId: analyzeGeminiDraft
+      tags: [gemini]
+      summary: Analyze a match draft with Gemini AI
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GeminiAnalyzeInput"
+      responses:
+        "200":
+          description: SSE stream of analysis
+          content:
+            text/event-stream: {}
+
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+
+    TournamentInput:
+      type: object
+      properties:
+        url:
+          type: string
+          description: Full Matcherino tournament URL (e.g. https://matcherino.com/t/bbl_s9_q3/overview)
+      required:
+        - url
+
+    Tournament:
+      type: object
+      properties:
+        id:
+          type: integer
+        slug:
+          type: string
+        name:
+          type: string
+        url:
+          type: string
+        gameName:
+          type: ["string", "null"]
+        gameMode:
+          type: ["string", "null"]
+        imageUrl:
+          type: ["string", "null"]
+        matchCount:
+          type: integer
+        status:
+          type: string
+          description: fetching | done | error
+        errorMessage:
+          type: ["string", "null"]
+          description: Set when status is error
+        eventDate:
+          type: ["string", "null"]
+          format: date-time
+          description: When the event took place (from Matcherino startAt)
+        source:
+          type: string
+          description: manual | emea_auto
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - slug
+        - name
+        - url
+        - matchCount
+        - status
+        - source
+        - createdAt
+        - updatedAt
+
+    Match:
+      type: object
+      properties:
+        id:
+          type: integer
+        tournamentId:
+          type: integer
+        tournamentName:
+          type: string
+        externalMatchId:
+          type: string
+        team1Name:
+          type: string
+        team2Name:
+          type: string
+        winnerName:
+          type: ["string", "null"]
+        score:
+          type: ["string", "null"]
+        roundName:
+          type: ["string", "null"]
+        maps:
+          type: array
+          items:
+            $ref: "#/components/schemas/MapDraft"
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - tournamentId
+        - tournamentName
+        - externalMatchId
+        - team1Name
+        - team2Name
+        - maps
+        - createdAt
+
+    MapDraft:
+      type: object
+      properties:
+        mapName:
+          type: string
+        gameMode:
+          type: ["string", "null"]
+        gameModeIcon:
+          type: ["string", "null"]
+        action:
+          type: string
+          description: pick | ban | decider
+        pickedBy:
+          type: ["string", "null"]
+          description: Team name that picked/banned this map
+        winner:
+          type: ["string", "null"]
+          description: Team name that won this map (if played)
+        team1Score:
+          type: ["integer", "null"]
+        team2Score:
+          type: ["integer", "null"]
+        duration:
+          type: ["integer", "null"]
+          description: Game duration in seconds
+        setIndex:
+          type: ["integer", "null"]
+          description: Zero-based index of the set within the match (for grouping games into sets)
+        picks:
+          type: array
+          items:
+            $ref: "#/components/schemas/DraftEntry"
+        bans:
+          type: array
+          items:
+            $ref: "#/components/schemas/DraftEntry"
+      required:
+        - mapName
+        - action
+        - picks
+        - bans
+
+    DraftEntry:
+      type: object
+      properties:
+        team:
+          type: string
+        value:
+          type: string
+          description: Operator name, hero name, etc.
+        imageUrl:
+          type: ["string", "null"]
+        type:
+          type: string
+          description: pick | ban
+        playerName:
+          type: ["string", "null"]
+          description: Display name of the player who used this brawler
+        gadget:
+          type: ["string", "null"]
+          description: Gadget name equipped by the brawler
+        starPower:
+          type: ["string", "null"]
+          description: Star power name equipped by the brawler
+        hypercharge:
+          type: ["string", "null"]
+          description: Hypercharge name equipped by the brawler
+        gears:
+          type: array
+          items:
+            type: string
+          description: List of gear names equipped by the brawler
+      required:
+        - team
+        - value
+        - type
+
+    GeminiConversation:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - title
+        - createdAt
+    GeminiMessage:
+      type: object
+      properties:
+        id:
+          type: integer
+        conversationId:
+          type: integer
+        role:
+          type: string
+        content:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - conversationId
+        - role
+        - content
+        - createdAt
+    GeminiConversationInput:
+      type: object
+      properties:
+        title:
+          type: string
+      required:
+        - title
+    GeminiMessageInput:
+      type: object
+      properties:
+        content:
+          type: string
+      required:
+        - content
+    GeminiConversationWithMessages:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/GeminiMessage"
+      required:
+        - id
+        - title
+        - createdAt
+        - messages
+    GeminiError:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+    BscSyncDayResult:
+      type: object
+      properties:
+        tournamentId:
+          type: integer
+        matchCount:
+          type: integer
+        gameCount:
+          type: integer
+        unresolvedOpponents:
+          type: integer
+      required: [tournamentId, matchCount, gameCount, unresolvedOpponents]
+
+    BscSyncResult:
+      type: object
+      properties:
+        day1:
+          $ref: "#/components/schemas/BscSyncDayResult"
+        day2:
+          $ref: "#/components/schemas/BscSyncDayResult"
+      required: [day1, day2]
+
+    GeminiAnalyzeInput:
+      type: object
+      properties:
+        matchId:
+          type: integer
+        extraContext:
+          type: ["string", "null"]
+      required:
+        - matchId

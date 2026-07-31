@@ -1,0 +1,6 @@
+{
+  "name": "Data Draft",
+  "description": "Brawl Stars esports analytics, tournament scanner, scrim tracker, and drafting tool.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
